@@ -5,7 +5,6 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
 
     <application
-        android:screenOrientation="landscape"
         android:configChanges="orientation|keyboardHidden|screenSize"
         tools:ignore="LockedOrientationActivity"
         android:usesCleartextTraffic="true"
