@@ -2,6 +2,8 @@ package com.example.minirccarapp;
 
 import static android.content.ContentValues.TAG;
 
+import static androidx.core.content.ContentProviderCompat.requireContext;
+
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Context;
@@ -17,6 +19,9 @@ import android.util.Log;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
+import android.webkit.JsPromptResult;
+import android.webkit.JsResult;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -207,7 +212,7 @@ public class MainActivity extends AppCompatActivity {
         supportRequestWindowFeature(Window.FEATURE_ACTION_BAR_OVERLAY);
         setContentView(R.layout.activity_main);
 
-        this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+    //    this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
         final int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
@@ -259,54 +264,103 @@ public class MainActivity extends AppCompatActivity {
 
         mywebView = (WebView) findViewById(R.id.webview);
         mywebView.setWebChromeClient(new WebChromeClient());
-        mywebView.setWebViewClient(new WebViewClient());
+        //mywebView.setWebViewClient(new WebViewClient());
+        mywebView.setWebViewClient(new mywebClient());
         String espIp;
         do{
             espIp = espCarFound();
         }while(espIp == "null");
         Log.e(TAG, "esp car found IP: " + espIp);
         //mywebView.loadUrl("http://192.168.1.76");
-        mywebView.loadUrl("http://" + espIp);
         WebSettings webSettings = mywebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
+        //mywebView.addJavascriptInterface(AndroidJSInterface, "Android");
+        mywebView.addJavascriptInterface(new Object() {
+            @JavascriptInterface
+            public void webViewGamepadViewSet() {
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+                Log.d("webViewGamepadViewSet", "webViewGamepadViewSet() called from JS");
+            }
+        }, "Android");
+
+
+        mywebView.loadUrl("http://" + espIp);
+        //mywebView.evaluateJavascript("setWebView();", null);
+        //Log.w(TAG, "setWebView() called from android");
     }
 
     public void onWindowFocusChanged(boolean hasFocus)
     {
         super.onWindowFocusChanged(hasFocus);
-        getWindow().getDecorView().setSystemUiVisibility(
+     /*   getWindow().getDecorView().setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                             | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                             | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                             | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                             | View.SYSTEM_UI_FLAG_FULLSCREEN
                             | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+    */
     }
+
+    private class MyWebChromeClient extends WebChromeClient {
+        @Override
+        public boolean onJsAlert(WebView view, String url, String message, final JsResult result) {
+            return true;
+        }
+
+        @Override
+        public boolean onJsConfirm(WebView view, String url, String message, final JsResult result) {
+            return true;
+        }
+
+        @Override
+        public boolean onJsPrompt(WebView view, String url, String message, String defaultValue,
+                                  final JsPromptResult result) {
+            return true;
+        }
+    }
+
 
     public class mywebClient extends WebViewClient {
         @Override
         public void onPageStarted(WebView view, String url, Bitmap favicon) {
             Log.d(TAG, "onPageStarted: " + url);
-            Toast.makeText(getApplicationContext(),"onPageStarted",Toast.LENGTH_LONG).show();
+            //Toast.makeText(getApplicationContext(),"onPageStarted",Toast.LENGTH_LONG).show();
 
             super.onPageStarted(view, url, favicon);
         }
 
         @Override
+        public void onPageFinished(WebView view, String url) {
+            view.evaluateJavascript("setWebView();", null);
+            Log.w(TAG, "setWebView() called from android");
+            /*view.loadUrl(
+                    """javascript:(function f() {
+                      var btns = document.getElementsByTagName('button');
+                      for (var i = 0, n = allElements.length; i < n; i++) {
+                        if (btns[i].getAttribute('aria-label') === 'Support') {
+                          btns[i].setAttribute('onclick', 'Android.onClicked()');
+                        }
+                      }
+                    })()"""
+            );*/
+        }
+
+        @Override
         public void onLoadResource(WebView view, String url) {
             Log.d(TAG, "onLoadResource: " + url);
-            Toast.makeText(getApplicationContext(),"onLoadResource",Toast.LENGTH_LONG).show();
+            //Toast.makeText(getApplicationContext(),"onLoadResource",Toast.LENGTH_LONG).show();
 
         }
 
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
             Log.d(TAG, "shouldOverrideUrlLoading 1: " + url);
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            //setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
             final Uri uri = Uri.parse(url);
-            Toast.makeText(getApplicationContext(),"prova1",Toast.LENGTH_LONG).show();
+            //Toast.makeText(getApplicationContext(),"prova1",Toast.LENGTH_LONG).show();
             return handleUri(view, url);
         }
 
@@ -318,7 +372,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         private boolean handleUri(WebView view, String url) {
-            Toast.makeText(getApplicationContext(),"prova2",Toast.LENGTH_LONG).show();
+            //Toast.makeText(getApplicationContext(),"prova2",Toast.LENGTH_LONG).show();
             view.loadUrl(url);
             getSupportActionBar().hide();
             //final String host = uri.getHost();
@@ -342,7 +396,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public WebResourceResponse shouldInterceptRequest ( WebView view, String url) {
             Log.d(TAG, "shouldInterceptRequest 1: " + url);
-            Toast.makeText(getApplicationContext(),"prova3",Toast.LENGTH_LONG).show();
+            //Toast.makeText(getApplicationContext(),"prova3",Toast.LENGTH_LONG).show();
 
             // if (url.contains(".css")) {
            //     return getCssWebResourceResponseFromAsset();
@@ -355,7 +409,7 @@ public class MainActivity extends AppCompatActivity {
         public WebResourceResponse shouldInterceptRequest(WebView view,
                                                           WebResourceRequest request) {
             Log.d(TAG, "shouldInterceptRequest 2: " + request.getUrl());
-            Toast.makeText(getApplicationContext(),"prova4",Toast.LENGTH_LONG).show();
+            //Toast.makeText(getApplicationContext(),"prova4",Toast.LENGTH_LONG).show();
 
             return shouldInterceptRequest(view, request.getUrl().toString());
         }
