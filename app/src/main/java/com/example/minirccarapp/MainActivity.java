@@ -48,13 +48,9 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
     private WebView mywebView;
     private SwipeRefreshLayout swipeRefreshLayout;
     private RelativeLayout no_internet_layout;
-
-    private NsdManager mNsdManager;
+    private mDnsDiscover mDnsDiscover;
 
     public String espIPAddr = "null";
-
-    //String SERVICE_TYPE = "_http._tcp.";
-    String SERVICE_TYPE = "_espcar._tcp.";
 
     public String espCarFound() {
         return espIPAddr;
@@ -64,150 +60,6 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
 
     }
 
-    NsdManager.ResolveListener mResolveListener;
-
-    //private NsdManager.ResolveListener mResolveListener = new NsdManager.ResolveListener() {
-    void initializeResolveListener() {
-        Log.e(TAG, "initializeResolveListener ... ");
-        mResolveListener = new NsdManager.ResolveListener() {
-            @Override
-            public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
-                // Called when the resolve fails.  Use the error code to debug.
-                Log.e(TAG, "Resolve failed" + errorCode);
-            }
-
-            @Override
-            public void onServiceResolved(NsdServiceInfo serviceInfo) {
-                Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
-
-              /*  if (serviceInfo.getServiceName().equals(mServiceName)) {
-                    Log.d(TAG, "Same IP.");
-                    return;
-                }*/
-                NsdServiceInfo service = serviceInfo;
-                int port = service.getPort();
-                InetAddress host = service.getHost(); // getHost() will work now
-                Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
-
-                if (host.getHostAddress().toString().startsWith("/")) {
-                    Log.d(TAG, "IP: " + host.getHostAddress().toString().substring(1));
-                    espIPAddr = host.getHostAddress().toString().substring(1);
-                } else {
-                    espIPAddr = host.getHostAddress().toString();
-                }
-                Log.d(TAG, "host IP: " + espIPAddr);
-
-                // mywebView.loadUrl(service.getHost().toString());
-
-            }
-        };
-        Log.e(TAG, "initializeResolveListener ... END");
-    }
-
-
-    // Instantiate a new DiscoveryListener
-    NsdManager.DiscoveryListener mDiscoveryListener;
-
-    // private NsdManager.DiscoveryListener mDiscoveryListener = new NsdManager.DiscoveryListener() {
-    void initializeListener() {
-        Log.e(TAG, "initializeListener ... ");
-        mDiscoveryListener = new NsdManager.DiscoveryListener() {
-
-            String TAG = "NSDFINDER";
-            //NsdManager mNsdManager;
-            //NsdManager.DiscoveryListener mDiscoveryListener;
-            String mServiceName;
-            //String SERVICE_TYPE = "_http._tcp.";
-            String SERVICE_TYPE = "_espcar._tcp.";
-            String serviceName;
-            int mDiscoveryActive = 0;
-            //NsdManager.ResolveListener mResolveListener;
-            NsdServiceInfo mService;
-            int mServiceport;
-            InetAddress mServicehostAdress;
-
-            // Called as soon as service discovery begins.
-            @Override
-            public void onDiscoveryStarted(String regType) {
-                Log.d(TAG, "Service discovery started");
-            }
-
-            @Override
-            public void onServiceFound(NsdServiceInfo service) {
-                // A service was found! Do something with it.
-
-                mNsdManager.resolveService(service, mResolveListener);
-                //mNsdManager.stopServiceDiscovery(mDiscoveryListener)
-
-
-                Log.d(TAG, "Service discovery success :: " + service);
-                int mServiceport = service.getPort();
-                Log.d(TAG, "getAttributes :: " + service.getAttributes());
-                InetAddress mServicehostAdress = service.getHost();
-                Log.d(TAG, "Service Port: " + mServiceport + " Adresse: " + mServicehostAdress);
-                //Toast.makeText(getApplicationContext(),"Service Port: "+mServiceport+" Adresse: "+mServicehostAdress,Toast.LENGTH_LONG).show();
-
-                try {
-                    InetAddress inetAddr = InetAddress.getByName("mini_rc_car.local");
-
-
-                    byte[] addr = inetAddr.getAddress();
-
-                    // Convert to dot representation
-                    String ipAddr = "";
-                    for (int i = 0; i < addr.length; i++) {
-                        if (i > 0) {
-                            ipAddr += ".";
-                        }
-                        ipAddr += addr[i] & 0xFF;
-                    }
-
-                    Log.d(TAG, "IP Address: " + ipAddr);
-                } catch (UnknownHostException e) {
-                    Log.d(TAG, "Host not found: " + e.getMessage());
-                }
-
-         /*   if (!service.getServiceType().equals(SERVICE_TYPE)) {
-                // Service type is the string containing the protocol and
-                // transport layer for this service.
-                Log.d(TAG, "Unknown Service Type: " + service.getServiceType());
-            } else if (service.getServiceName().equals(serviceName)) {
-                // The name of the service tells the user what they'd be
-                // connecting to. It could be "Bob's Chat App".
-                Log.d(TAG, "Same machine: " + serviceName);
-            } else if (service.getServiceName().contains("NsdChat")){
-                NsdManager.ResolveListener resolveListener;
-                mNsdManager.resolveService(service, resolveListener);
-            }*/
-
-            }
-
-            @Override
-            public void onServiceLost(NsdServiceInfo service) {
-                // When the network service is no longer available.
-                // Internal bookkeeping code goes here.
-                Log.e(TAG, "service lost: " + service);
-            }
-
-            @Override
-            public void onDiscoveryStopped(String serviceType) {
-                Log.i(TAG, "Discovery stopped: " + serviceType);
-            }
-
-            @Override
-            public void onStartDiscoveryFailed(String serviceType, int errorCode) {
-                Log.e(TAG, "Discovery failed: Error code:" + errorCode);
-                mNsdManager.stopServiceDiscovery(this);
-            }
-
-            @Override
-            public void onStopDiscoveryFailed(String serviceType, int errorCode) {
-                Log.e(TAG, "Discovery failed: Error code:" + errorCode);
-                mNsdManager.stopServiceDiscovery(this);
-            }
-        };
-        Log.e(TAG, "initializeListener ... END");
-    }
 
 
     public void onConfigurationChanged(Configuration newConfig) {
@@ -317,39 +169,186 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
 
 
         //mywebView.loadUrl("http://" + espIp + "/index.htm");
-        loadWebPage(mContext);
+        mDnsDiscover = new mDnsDiscover(mContext);
+        loadWebPage();
         //mywebView.evaluateJavascript("setWebView();", null);
         //Log.w(TAG, "setWebView() called from android");
     }
 
     class mDnsDiscover {
-        Context mContext;
-        WifiManager.MulticastLock mMulticastLock;
+        private Context mContext;
+        private NsdManager mNsdManager;
+        private NsdManager.ResolveListener mResolveListener;
+        private NsdManager.DiscoveryListener mDiscoveryListener;
+        private WifiManager.MulticastLock mMulticastLock;
+
+        private String SERVICE_TYPE = "_espcar._tcp.";
+        private WifiManager mWifi;
+
         public mDnsDiscover(Context context) {
             this.mContext = context;
+            this.mNsdManager = (NsdManager) context.getSystemService(Context.NSD_SERVICE);
+            this.mWifi = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+
+            this.initializeResolveListener();
+            this.initializeListener();
         }
         private void discoverStop()
         {
+            this.mNsdManager.stopServiceDiscovery(mDiscoveryListener);
             this.mMulticastLock.release(); // release after browsing
         }
 
         private void discoverStart() {
-            WifiManager wifi = (WifiManager) this.mContext.getSystemService(Context.WIFI_SERVICE);
-            this.mMulticastLock = wifi.createMulticastLock("multicastLock");
+            this.mMulticastLock = mWifi.createMulticastLock("multicastLock");
             this.mMulticastLock.setReferenceCounted(true);
             this.mMulticastLock.acquire();
 
-            mNsdManager = (NsdManager) mContext.getSystemService(Context.NSD_SERVICE);
+            this.mNsdManager.discoverServices(SERVICE_TYPE, mNsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
+        }
 
-            initializeResolveListener();
-            initializeListener();
+        void initializeResolveListener() {
+            Log.e(TAG, "initializeResolveListener ... ");
+            mResolveListener = new NsdManager.ResolveListener() {
+                @Override
+                public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
+                    // Called when the resolve fails.  Use the error code to debug.
+                    Log.e(TAG, "Resolve failed" + errorCode);
+                }
 
-            mNsdManager.discoverServices(SERVICE_TYPE, mNsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
+                @Override
+                public void onServiceResolved(NsdServiceInfo serviceInfo) {
+                    Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
+
+              /*  if (serviceInfo.getServiceName().equals(mServiceName)) {
+                    Log.d(TAG, "Same IP.");
+                    return;
+                }*/
+                    NsdServiceInfo service = serviceInfo;
+                    int port = service.getPort();
+                    InetAddress host = service.getHost(); // getHost() will work now
+                    Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
+
+                    if (host.getHostAddress().toString().startsWith("/")) {
+                        Log.d(TAG, "IP: " + host.getHostAddress().toString().substring(1));
+                        espIPAddr = host.getHostAddress().toString().substring(1);
+                    } else {
+                        espIPAddr = host.getHostAddress().toString();
+                    }
+                    Log.d(TAG, "host IP: " + espIPAddr);
+
+                    // mywebView.loadUrl(service.getHost().toString());
+
+                }
+            };
+            Log.e(TAG, "initializeResolveListener ... END");
+        }
+
+
+        // Instantiate a new DiscoveryListener
+        //NsdManager.DiscoveryListener mDiscoveryListener;
+        // private NsdManager.DiscoveryListener mDiscoveryListener = new NsdManager.DiscoveryListener() {
+        void initializeListener() {
+            Log.e(TAG, "initializeListener ... ");
+            mDiscoveryListener = new NsdManager.DiscoveryListener() {
+
+                String TAG = "NSDFINDER";
+                //NsdManager mNsdManager;
+                //NsdManager.DiscoveryListener mDiscoveryListener;
+                String mServiceName;
+                //String SERVICE_TYPE = "_http._tcp.";
+                //String SERVICE_TYPE = "_espcar._tcp.";
+                String serviceName;
+                int mDiscoveryActive = 0;
+                //NsdManager.ResolveListener mResolveListener;
+                NsdServiceInfo mService;
+                int mServiceport;
+                InetAddress mServicehostAdress;
+
+                // Called as soon as service discovery begins.
+                @Override
+                public void onDiscoveryStarted(String regType) {
+                    Log.d(TAG, "Service discovery started");
+                }
+
+                @Override
+                public void onServiceFound(NsdServiceInfo service) {
+                    // A service was found! Do something with it.
+
+                    mNsdManager.resolveService(service, mResolveListener);
+                    //mNsdManager.stopServiceDiscovery(mDiscoveryListener)
+
+
+                    Log.d(TAG, "Service discovery success :: " + service);
+                    int mServiceport = service.getPort();
+                    Log.d(TAG, "getAttributes :: " + service.getAttributes());
+                    InetAddress mServicehostAdress = service.getHost();
+                    Log.d(TAG, "Service Port: " + mServiceport + " Adresse: " + mServicehostAdress);
+                    //Toast.makeText(getApplicationContext(),"Service Port: "+mServiceport+" Adresse: "+mServicehostAdress,Toast.LENGTH_LONG).show();
+
+                    try {
+                        InetAddress inetAddr = InetAddress.getByName("mini_rc_car.local");
+
+
+                        byte[] addr = inetAddr.getAddress();
+
+                        // Convert to dot representation
+                        String ipAddr = "";
+                        for (int i = 0; i < addr.length; i++) {
+                            if (i > 0) {
+                                ipAddr += ".";
+                            }
+                            ipAddr += addr[i] & 0xFF;
+                        }
+
+                        Log.d(TAG, "IP Address: " + ipAddr);
+                    } catch (UnknownHostException e) {
+                        Log.d(TAG, "Host not found: " + e.getMessage());
+                    }
+
+         /*   if (!service.getServiceType().equals(SERVICE_TYPE)) {
+                // Service type is the string containing the protocol and
+                // transport layer for this service.
+                Log.d(TAG, "Unknown Service Type: " + service.getServiceType());
+            } else if (service.getServiceName().equals(serviceName)) {
+                // The name of the service tells the user what they'd be
+                // connecting to. It could be "Bob's Chat App".
+                Log.d(TAG, "Same machine: " + serviceName);
+            } else if (service.getServiceName().contains("NsdChat")){
+                NsdManager.ResolveListener resolveListener;
+                mNsdManager.resolveService(service, resolveListener);
+            }*/
+
+                }
+
+                @Override
+                public void onServiceLost(NsdServiceInfo service) {
+                    // When the network service is no longer available.
+                    // Internal bookkeeping code goes here.
+                    Log.e(TAG, "service lost: " + service);
+                }
+
+                @Override
+                public void onDiscoveryStopped(String serviceType) {
+                    Log.i(TAG, "Discovery stopped: " + serviceType);
+                }
+
+                @Override
+                public void onStartDiscoveryFailed(String serviceType, int errorCode) {
+                    Log.e(TAG, "Discovery failed: Error code:" + errorCode);
+                    mNsdManager.stopServiceDiscovery(this);
+                }
+
+                @Override
+                public void onStopDiscoveryFailed(String serviceType, int errorCode) {
+                    Log.e(TAG, "Discovery failed: Error code:" + errorCode);
+                    mNsdManager.stopServiceDiscovery(this);
+                }
+            };
+            Log.e(TAG, "initializeListener ... END");
         }
     }
-    private void loadWebPage(Context context) {
-
-        mDnsDiscover mDnsDiscover = new mDnsDiscover(context);
+    private void loadWebPage() {
 
         ConnectivityManager cm = (ConnectivityManager) MainActivity.this
                 .getApplication().getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -571,6 +570,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             background = false;
             Log.v("activityFocus", "Activity came in foreground ");
             Toast.makeText(getApplicationContext(), "Foreground", Toast.LENGTH_SHORT).show();
+            loadWebPage();
         }
     }
 
@@ -595,6 +595,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             Toast.makeText(getApplicationContext(), "Background", Toast.LENGTH_SHORT).show();
             background=true;
             mywebView.evaluateJavascript("wsStop();", null);
+            mywebView.loadUrl("about:blank");
         }
     }
 
