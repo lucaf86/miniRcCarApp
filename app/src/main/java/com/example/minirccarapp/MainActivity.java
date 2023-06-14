@@ -2,19 +2,26 @@ package com.example.minirccarapp;
 
 import static android.content.ContentValues.TAG;
 
-import static androidx.core.content.ContentProviderCompat.requireContext;
-
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.app.Application;
 import android.content.Context;
-import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
@@ -22,34 +29,40 @@ import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
+import android.webkit.WebBackForwardList;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.RelativeLayout;
 import android.widget.Toast;
 
-import org.intellij.lang.annotations.RegExp;
-
-import java.net.URL;
-
-import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements Application.ActivityLifecycleCallbacks {
 
+    private static boolean background = false;
     private WebView mywebView;
+    private SwipeRefreshLayout swipeRefreshLayout;
+    private RelativeLayout no_internet_layout;
 
     private NsdManager mNsdManager;
 
     public String espIPAddr = "null";
 
+    //String SERVICE_TYPE = "_http._tcp.";
+    String SERVICE_TYPE = "_espcar._tcp.";
+
     public String espCarFound() {
         return espIPAddr;
     }
 
+    private void handleOrientation(boolean landscape) {
+
+    }
 
     NsdManager.ResolveListener mResolveListener;
 
@@ -57,47 +70,45 @@ public class MainActivity extends AppCompatActivity {
     void initializeResolveListener() {
         Log.e(TAG, "initializeResolveListener ... ");
         mResolveListener = new NsdManager.ResolveListener() {
-        @Override
-        public void onResolveFailed (NsdServiceInfo serviceInfo,int errorCode){
-            // Called when the resolve fails.  Use the error code to debug.
-            Log.e(TAG, "Resolve failed" + errorCode);
-        }
+            @Override
+            public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
+                // Called when the resolve fails.  Use the error code to debug.
+                Log.e(TAG, "Resolve failed" + errorCode);
+            }
 
-        @Override
-        public void onServiceResolved (NsdServiceInfo serviceInfo){
-            Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
+            @Override
+            public void onServiceResolved(NsdServiceInfo serviceInfo) {
+                Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
 
               /*  if (serviceInfo.getServiceName().equals(mServiceName)) {
                     Log.d(TAG, "Same IP.");
                     return;
                 }*/
-            NsdServiceInfo service = serviceInfo;
-            int port = service.getPort();
-            InetAddress host = service.getHost(); // getHost() will work now
-            Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
+                NsdServiceInfo service = serviceInfo;
+                int port = service.getPort();
+                InetAddress host = service.getHost(); // getHost() will work now
+                Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
 
-            if(host.getHostAddress().toString().startsWith("/")) {
-                Log.d(TAG,"IP: " + host.getHostAddress().toString().substring(1) );
-                espIPAddr = host.getHostAddress().toString().substring(1);
+                if (host.getHostAddress().toString().startsWith("/")) {
+                    Log.d(TAG, "IP: " + host.getHostAddress().toString().substring(1));
+                    espIPAddr = host.getHostAddress().toString().substring(1);
+                } else {
+                    espIPAddr = host.getHostAddress().toString();
+                }
+                Log.d(TAG, "host IP: " + espIPAddr);
+
+                // mywebView.loadUrl(service.getHost().toString());
+
             }
-            else {
-                espIPAddr = host.getHostAddress().toString();
-            }
-            Log.d(TAG,"host IP: " + espIPAddr );
-
-           // mywebView.loadUrl(service.getHost().toString());
-
-        }
-    };
+        };
         Log.e(TAG, "initializeResolveListener ... END");
-}
-
+    }
 
 
     // Instantiate a new DiscoveryListener
     NsdManager.DiscoveryListener mDiscoveryListener;
 
-        // private NsdManager.DiscoveryListener mDiscoveryListener = new NsdManager.DiscoveryListener() {
+    // private NsdManager.DiscoveryListener mDiscoveryListener = new NsdManager.DiscoveryListener() {
     void initializeListener() {
         Log.e(TAG, "initializeListener ... ");
         mDiscoveryListener = new NsdManager.DiscoveryListener() {
@@ -199,20 +210,31 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+
+        // Checks the orientation of the screen
+        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            Toast.makeText(this, "landscape", Toast.LENGTH_SHORT).show();
+        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+            Toast.makeText(this, "portrait", Toast.LENGTH_SHORT).show();
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-
-
-
-
+        Log.w("APP_ON_CREATE", "APP onCreate");
         super.onCreate(savedInstanceState);
+        if (savedInstanceState == null) {
+            Log.w("APP_ON_CREATE", "APP onCreate called the first time");
+        }
+        registerActivityLifecycleCallbacks(this);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
         supportRequestWindowFeature(Window.FEATURE_ACTION_BAR_OVERLAY);
         setContentView(R.layout.activity_main);
 
-    //    this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        //    this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
         final int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
@@ -228,23 +250,19 @@ public class MainActivity extends AppCompatActivity {
         // show up and won't hide
         final View decorView = getWindow().getDecorView();
         decorView
-                .setOnSystemUiVisibilityChangeListener(new View.OnSystemUiVisibilityChangeListener()
-                {
+                .setOnSystemUiVisibilityChangeListener(new View.OnSystemUiVisibilityChangeListener() {
 
                     @Override
-                    public void onSystemUiVisibilityChange(int visibility)
-                    {
-                        if((visibility & View.SYSTEM_UI_FLAG_FULLSCREEN) == 0)
-                        {
+                    public void onSystemUiVisibilityChange(int visibility) {
+                        if ((visibility & View.SYSTEM_UI_FLAG_FULLSCREEN) == 0) {
                             decorView.setSystemUiVisibility(flags);
                         }
                     }
                 });
 
         Context mContext = getApplicationContext();
-        //String SERVICE_TYPE = "_http._tcp.";
-        String SERVICE_TYPE = "_espcar._tcp.";
 
+/*
         WifiManager wifi = (WifiManager) mContext.getSystemService(Context.WIFI_SERVICE);
         WifiManager.MulticastLock multicastLock = wifi.createMulticastLock("multicastLock");
         multicastLock.setReferenceCounted(true);
@@ -261,16 +279,27 @@ public class MainActivity extends AppCompatActivity {
         mNsdManager.discoverServices(SERVICE_TYPE, mNsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
 
         //multicastLock.release(); // release after browsing
-
+*/
         mywebView = (WebView) findViewById(R.id.webview);
+        swipeRefreshLayout = findViewById(R.id.webView_reload);
+        no_internet_layout = findViewById(R.id.no_internet_layout);
+
+        swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+                mywebView.reload();
+            }
+        });
+
         mywebView.setWebChromeClient(new WebChromeClient());
         //mywebView.setWebViewClient(new WebViewClient());
-        mywebView.setWebViewClient(new mywebClient());
+        mywebView.setWebViewClient(new BrowserClient(swipeRefreshLayout));
         String espIp;
-        do{
+/*        do{
             espIp = espCarFound();
         }while(espIp == "null");
         Log.e(TAG, "esp car found IP: " + espIp);
+*/
         //mywebView.loadUrl("http://192.168.1.76");
         WebSettings webSettings = mywebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
@@ -281,15 +310,73 @@ public class MainActivity extends AppCompatActivity {
             @JavascriptInterface
             public void webViewGamepadViewSet() {
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+                handler.sendEmptyMessage(1);
                 Log.d("webViewGamepadViewSet", "webViewGamepadViewSet() called from JS");
             }
         }, "Android");
 
 
-        mywebView.loadUrl("http://" + espIp);
+        //mywebView.loadUrl("http://" + espIp + "/index.htm");
+        loadWebPage(mContext);
         //mywebView.evaluateJavascript("setWebView();", null);
         //Log.w(TAG, "setWebView() called from android");
     }
+
+    class mDnsDiscover {
+        Context mContext;
+        WifiManager.MulticastLock mMulticastLock;
+        public mDnsDiscover(Context context) {
+            this.mContext = context;
+        }
+        private void discoverStop()
+        {
+            this.mMulticastLock.release(); // release after browsing
+        }
+
+        private void discoverStart() {
+            WifiManager wifi = (WifiManager) this.mContext.getSystemService(Context.WIFI_SERVICE);
+            this.mMulticastLock = wifi.createMulticastLock("multicastLock");
+            this.mMulticastLock.setReferenceCounted(true);
+            this.mMulticastLock.acquire();
+
+            mNsdManager = (NsdManager) mContext.getSystemService(Context.NSD_SERVICE);
+
+            initializeResolveListener();
+            initializeListener();
+
+            mNsdManager.discoverServices(SERVICE_TYPE, mNsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
+        }
+    }
+    private void loadWebPage(Context context) {
+
+        mDnsDiscover mDnsDiscover = new mDnsDiscover(context);
+
+        ConnectivityManager cm = (ConnectivityManager) MainActivity.this
+                .getApplication().getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = cm.getActiveNetworkInfo();
+
+        if (networkInfo!=null && networkInfo.isConnectedOrConnecting()){
+            mDnsDiscover.discoverStart();
+            String espIp;
+            do{
+                espIp = espCarFound();
+            }while(espIp == "null");
+            mDnsDiscover.discoverStop();
+            Log.e(TAG, "esp car found IP: " + espIp);
+            //mywebView.loadUrl("https://google.com");
+            mywebView.loadUrl("http://" + espIp + "/index.htm");
+            no_internet_layout.setVisibility(View.GONE);
+            mywebView.setVisibility(View.VISIBLE);
+        }else {
+            no_internet_layout.setVisibility(View.VISIBLE);
+            mywebView.setVisibility(View.GONE);
+            Toast.makeText(this, "You dont have any active internet connection", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+   // public void ReconectWebSite(View view) {
+   //     loadWebPage(mContext);
+   // }
 
     public void onWindowFocusChanged(boolean hasFocus)
     {
@@ -323,17 +410,41 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    public class mywebClient extends WebViewClient {
+    @SuppressLint("HandlerLeak")
+    private Handler handler = new Handler(){
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            switch (msg.what){
+                case 1:
+                    swipeRefreshLayout.setEnabled(false);
+                    break;
+                case 2:
+                    swipeRefreshLayout.setEnabled(true);
+                    break;
+            }
+        }
+    };
+
+    public class BrowserClient extends WebViewClient {
+
+        SwipeRefreshLayout swipeRefreshLayout;
+
+        public BrowserClient(SwipeRefreshLayout swipeRefreshLayout) {
+            this.swipeRefreshLayout = swipeRefreshLayout;
+        }
+
         @Override
         public void onPageStarted(WebView view, String url, Bitmap favicon) {
             Log.d(TAG, "onPageStarted: " + url);
             //Toast.makeText(getApplicationContext(),"onPageStarted",Toast.LENGTH_LONG).show();
 
             super.onPageStarted(view, url, favicon);
+            swipeRefreshLayout.setRefreshing(true);
         }
 
         @Override
         public void onPageFinished(WebView view, String url) {
+            super.onPageFinished(view, url);
             view.evaluateJavascript("setWebView();", null);
             Log.w(TAG, "setWebView() called from android");
             /*view.loadUrl(
@@ -346,6 +457,7 @@ public class MainActivity extends AppCompatActivity {
                       }
                     })()"""
             );*/
+            swipeRefreshLayout.setRefreshing(false);
         }
 
         @Override
@@ -373,8 +485,18 @@ public class MainActivity extends AppCompatActivity {
 
         private boolean handleUri(WebView view, String url) {
             //Toast.makeText(getApplicationContext(),"prova2",Toast.LENGTH_LONG).show();
-            view.loadUrl(url);
-            getSupportActionBar().hide();
+            if(url.indexOf("index.htm") > -1 ) {
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                Log.d(TAG, "handleUri index.htm matched: " + url);
+                // enable or re-enable swipe to refresh page after disabling it in gamepad view
+                handler.sendEmptyMessage(2);
+            //return false;
+            }
+            else {
+
+            }
+       //     view.loadUrl(url);
+     //       getSupportActionBar().hide();
             //final String host = uri.getHost();
             //final String scheme = uri.getScheme();
             // Based on some condition you need to determine if you are going to load the url
@@ -397,6 +519,7 @@ public class MainActivity extends AppCompatActivity {
         public WebResourceResponse shouldInterceptRequest ( WebView view, String url) {
             Log.d(TAG, "shouldInterceptRequest 1: " + url);
             //Toast.makeText(getApplicationContext(),"prova3",Toast.LENGTH_LONG).show();
+            handleUri(view, url);
 
             // if (url.contains(".css")) {
            //     return getCssWebResourceResponseFromAsset();
@@ -410,7 +533,7 @@ public class MainActivity extends AppCompatActivity {
                                                           WebResourceRequest request) {
             Log.d(TAG, "shouldInterceptRequest 2: " + request.getUrl());
             //Toast.makeText(getApplicationContext(),"prova4",Toast.LENGTH_LONG).show();
-
+            handleUri(view, request.getUrl().toString());
             return shouldInterceptRequest(view, request.getUrl().toString());
         }
 
@@ -419,10 +542,69 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onBackPressed(){
         if(mywebView.canGoBack()){
+            //myWebView = (WebView) findViewById(R.id.webview);
+            WebBackForwardList mWebBackForwardList = mywebView.copyBackForwardList();
+            if (mWebBackForwardList.getCurrentIndex() > 0) {
+                String historyUrl = mWebBackForwardList.getItemAtIndex(mWebBackForwardList.getCurrentIndex() - 1).getUrl();
+                if(historyUrl.indexOf("index.htm") > -1 ) {
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                }
+            }
             mywebView.goBack();
         }
         else {
             super.onBackPressed();
         }
+    }
+
+    private static int count = 0;
+
+    @Override
+    public void onActivityCreated(Activity activity, Bundle bundle) {
+        Log.v("onActivity", "Activity created ");
+    }
+
+    @Override
+    public void onActivityStarted(Activity activity) {
+        Log.v("onActivity", "Activity started ");
+        if(background){
+            background = false;
+            Log.v("activityFocus", "Activity came in foreground ");
+            Toast.makeText(getApplicationContext(), "Foreground", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onActivityResumed(Activity activity) {
+        count++;
+        Log.v("onActivity", "Activity resumed ");
+    }
+
+    @Override
+    public void onActivityPaused(Activity activity) {
+        count--;
+        Log.v("onActivity", "Activity paused ");
+
+    }
+
+    @Override
+    public void onActivityStopped(Activity activity) {
+        Log.v("onActivity", "Activity stopped ");
+        if(count==0){
+            Log.v("activityFocus", "Activity is in background ");
+            Toast.makeText(getApplicationContext(), "Background", Toast.LENGTH_SHORT).show();
+            background=true;
+            mywebView.evaluateJavascript("wsStop();", null);
+        }
+    }
+
+    @Override
+    public void onActivitySaveInstanceState(Activity activity, Bundle bundle) {
+        Log.v("onActivity", "Activity SaveInstanceState ");
+    }
+
+    @Override
+    public void onActivityDestroyed(Activity activity) {
+        Log.v("onActivity", "Activity Destroyed ");
     }
 }
