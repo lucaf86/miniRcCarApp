@@ -21,6 +21,7 @@ import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 import android.view.View;
@@ -39,8 +40,10 @@ import android.webkit.WebViewClient;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Objects;
 
 public class MainActivity extends AppCompatActivity implements Application.ActivityLifecycleCallbacks {
 
@@ -48,19 +51,40 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
     private WebView mywebView;
     private SwipeRefreshLayout swipeRefreshLayout;
     private RelativeLayout no_internet_layout;
+    private RelativeLayout mDns_discover_layout;
     private mDnsDiscover mDnsDiscover;
 
-    public String espIPAddr = "null";
+    //public String espIPAddr = "null";
 
-    public String espCarFound() {
-        return espIPAddr;
+    //public String espCarFound() { return espIPAddr; }
+
+    @SuppressLint("HandlerLeak")
+    final private Handler handler = new Handler(Looper.myLooper()){
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            switch (msg.what){
+                case 1:
+                    swipeRefreshLayout.setEnabled(false);
+                    break;
+                case 2:
+                    swipeRefreshLayout.setEnabled(true);
+                    break;
+                case 3:
+                    mDnsDiscover.discoverStop();
+                    Log.e(TAG, "esp car found IP: " + mDnsDiscover.getIp());
+                    loadWebPage(mDnsDiscover.getIp());
+                    break;
+            }
+        }
+    };
+
+    private void loadWebPage(String ipAddr) {
+        //mywebView.loadUrl("https://google.com");
+        mywebView.loadUrl("http://" + ipAddr + "/index.htm");
+        no_internet_layout.setVisibility(View.GONE);
+        mDns_discover_layout.setVisibility(View.GONE);
+        mywebView.setVisibility(View.VISIBLE);
     }
-
-    private void handleOrientation(boolean landscape) {
-
-    }
-
-
 
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
@@ -135,6 +159,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         mywebView = (WebView) findViewById(R.id.webview);
         swipeRefreshLayout = findViewById(R.id.webView_reload);
         no_internet_layout = findViewById(R.id.no_internet_layout);
+        mDns_discover_layout = findViewById(R.id.mDns_discover_layout);
 
         swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
             @Override
@@ -144,15 +169,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         });
 
         mywebView.setWebChromeClient(new WebChromeClient());
-        //mywebView.setWebViewClient(new WebViewClient());
         mywebView.setWebViewClient(new BrowserClient(swipeRefreshLayout));
-        String espIp;
-/*        do{
-            espIp = espCarFound();
-        }while(espIp == "null");
-        Log.e(TAG, "esp car found IP: " + espIp);
-*/
-        //mywebView.loadUrl("http://192.168.1.76");
         WebSettings webSettings = mywebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setCacheMode(WebSettings.LOAD_NO_CACHE);
@@ -170,33 +187,62 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
 
         //mywebView.loadUrl("http://" + espIp + "/index.htm");
         mDnsDiscover = new mDnsDiscover(mContext);
-        loadWebPage();
+        checkNetwor();
+        //loadWebPage();
         //mywebView.evaluateJavascript("setWebView();", null);
         //Log.w(TAG, "setWebView() called from android");
     }
 
     class mDnsDiscover {
-        private Context mContext;
-        private NsdManager mNsdManager;
+        //private Context mContext;
+        final private NsdManager mNsdManager;
         private NsdManager.ResolveListener mResolveListener;
         private NsdManager.DiscoveryListener mDiscoveryListener;
         private WifiManager.MulticastLock mMulticastLock;
 
-        private String SERVICE_TYPE = "_espcar._tcp.";
-        private WifiManager mWifi;
+        final private String SERVICE_TYPE = "_espcar._tcp.";
+        final private String SERVICE_NAME = "mini-rc-car";
+        final private WifiManager mWifi;
+
+        boolean isStared = false;
+
+        private String ipAddr = "";
+
+        public String getIp() {
+            return this.ipAddr;
+        }
 
         public mDnsDiscover(Context context) {
-            this.mContext = context;
+            //this.mContext = context;
             this.mNsdManager = (NsdManager) context.getSystemService(Context.NSD_SERVICE);
             this.mWifi = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
 
             this.initializeResolveListener();
             this.initializeListener();
+            this.isStared = false;
         }
+        private boolean isConnectedToThisServer(String host) {
+            Runtime runtime = Runtime.getRuntime();
+            try {
+                Process ipProcess = runtime.exec("/system/bin/ping -w 60 -c 1 " + host);
+                int exitValue = ipProcess.waitFor();
+                return (exitValue == 0);
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            return false;
+        }
+
+
         private void discoverStop()
         {
-            this.mNsdManager.stopServiceDiscovery(mDiscoveryListener);
-            this.mMulticastLock.release(); // release after browsing
+            if(this.isStared) {
+                this.mNsdManager.stopServiceDiscovery(this.mDiscoveryListener);
+                this.mMulticastLock.release(); // release after browsing
+                this.isStared = false;
+            }
         }
 
         private void discoverStart() {
@@ -204,12 +250,13 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             this.mMulticastLock.setReferenceCounted(true);
             this.mMulticastLock.acquire();
 
-            this.mNsdManager.discoverServices(SERVICE_TYPE, mNsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
+            this.mNsdManager.discoverServices(SERVICE_TYPE, this.mNsdManager.PROTOCOL_DNS_SD, this.mDiscoveryListener);
+            this.isStared = true;
         }
 
         void initializeResolveListener() {
             Log.e(TAG, "initializeResolveListener ... ");
-            mResolveListener = new NsdManager.ResolveListener() {
+            this.mResolveListener = new NsdManager.ResolveListener() {
                 @Override
                 public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
                     // Called when the resolve fails.  Use the error code to debug.
@@ -225,20 +272,23 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
                     return;
                 }*/
                     NsdServiceInfo service = serviceInfo;
-                    int port = service.getPort();
+                    //int port = service.getPort();
                     InetAddress host = service.getHost(); // getHost() will work now
                     Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
 
-                    if (host.getHostAddress().toString().startsWith("/")) {
-                        Log.d(TAG, "IP: " + host.getHostAddress().toString().substring(1));
-                        espIPAddr = host.getHostAddress().toString().substring(1);
+                    String hostAddr;
+                    if (Objects.requireNonNull(host.getHostAddress()).startsWith("/")) {
+                        Log.d(TAG, "IP: " + host.getHostAddress().substring(1));
+                        hostAddr = host.getHostAddress().substring(1);
                     } else {
-                        espIPAddr = host.getHostAddress().toString();
+                        hostAddr = host.getHostAddress();
                     }
-                    Log.d(TAG, "host IP: " + espIPAddr);
+                    Log.d(TAG, "host IP: " + hostAddr);
 
-                    // mywebView.loadUrl(service.getHost().toString());
-
+                    if (isConnectedToThisServer(hostAddr)) {
+                        ipAddr = hostAddr;
+                        handler.sendEmptyMessage(3);
+                    }
                 }
             };
             Log.e(TAG, "initializeResolveListener ... END");
@@ -250,20 +300,20 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         // private NsdManager.DiscoveryListener mDiscoveryListener = new NsdManager.DiscoveryListener() {
         void initializeListener() {
             Log.e(TAG, "initializeListener ... ");
-            mDiscoveryListener = new NsdManager.DiscoveryListener() {
+            this.mDiscoveryListener = new NsdManager.DiscoveryListener() {
 
                 String TAG = "NSDFINDER";
                 //NsdManager mNsdManager;
                 //NsdManager.DiscoveryListener mDiscoveryListener;
-                String mServiceName;
+                //String mServiceName;
                 //String SERVICE_TYPE = "_http._tcp.";
                 //String SERVICE_TYPE = "_espcar._tcp.";
-                String serviceName;
-                int mDiscoveryActive = 0;
+                //String serviceName;
+                //int mDiscoveryActive = 0;
                 //NsdManager.ResolveListener mResolveListener;
-                NsdServiceInfo mService;
-                int mServiceport;
-                InetAddress mServicehostAdress;
+                //NsdServiceInfo mService;
+                //int mServiceport;
+                //InetAddress mServicehostAdress;
 
                 // Called as soon as service discovery begins.
                 @Override
@@ -275,50 +325,17 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
                 public void onServiceFound(NsdServiceInfo service) {
                     // A service was found! Do something with it.
 
-                    mNsdManager.resolveService(service, mResolveListener);
+                    //mNsdManager.resolveService(service, mResolveListener);
                     //mNsdManager.stopServiceDiscovery(mDiscoveryListener)
-
-
                     Log.d(TAG, "Service discovery success :: " + service);
-                    int mServiceport = service.getPort();
-                    Log.d(TAG, "getAttributes :: " + service.getAttributes());
-                    InetAddress mServicehostAdress = service.getHost();
-                    Log.d(TAG, "Service Port: " + mServiceport + " Adresse: " + mServicehostAdress);
-                    //Toast.makeText(getApplicationContext(),"Service Port: "+mServiceport+" Adresse: "+mServicehostAdress,Toast.LENGTH_LONG).show();
 
-                    try {
-                        InetAddress inetAddr = InetAddress.getByName("mini_rc_car.local");
-
-
-                        byte[] addr = inetAddr.getAddress();
-
-                        // Convert to dot representation
-                        String ipAddr = "";
-                        for (int i = 0; i < addr.length; i++) {
-                            if (i > 0) {
-                                ipAddr += ".";
-                            }
-                            ipAddr += addr[i] & 0xFF;
+                    // host and port not yet availbale her, need to call resolveService() to decode them
+                    if (service.getServiceType().equals(SERVICE_TYPE)) {
+                        //if (service.getServiceName().equals(SERVICE_NAME))
+                        if (service.getServiceName().contains(SERVICE_NAME)) {
+                            mNsdManager.resolveService(service, mResolveListener);
                         }
-
-                        Log.d(TAG, "IP Address: " + ipAddr);
-                    } catch (UnknownHostException e) {
-                        Log.d(TAG, "Host not found: " + e.getMessage());
                     }
-
-         /*   if (!service.getServiceType().equals(SERVICE_TYPE)) {
-                // Service type is the string containing the protocol and
-                // transport layer for this service.
-                Log.d(TAG, "Unknown Service Type: " + service.getServiceType());
-            } else if (service.getServiceName().equals(serviceName)) {
-                // The name of the service tells the user what they'd be
-                // connecting to. It could be "Bob's Chat App".
-                Log.d(TAG, "Same machine: " + serviceName);
-            } else if (service.getServiceName().contains("NsdChat")){
-                NsdManager.ResolveListener resolveListener;
-                mNsdManager.resolveService(service, resolveListener);
-            }*/
-
                 }
 
                 @Override
@@ -336,19 +353,20 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
                 @Override
                 public void onStartDiscoveryFailed(String serviceType, int errorCode) {
                     Log.e(TAG, "Discovery failed: Error code:" + errorCode);
-                    mNsdManager.stopServiceDiscovery(this);
+                    //mNsdManager.stopServiceDiscovery(this);
                 }
 
                 @Override
                 public void onStopDiscoveryFailed(String serviceType, int errorCode) {
                     Log.e(TAG, "Discovery failed: Error code:" + errorCode);
-                    mNsdManager.stopServiceDiscovery(this);
+                    //mNsdManager.stopServiceDiscovery(this);
                 }
             };
             Log.e(TAG, "initializeListener ... END");
         }
     }
-    private void loadWebPage() {
+
+    private void checkNetwor() {
 
         ConnectivityManager cm = (ConnectivityManager) MainActivity.this
                 .getApplication().getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -356,18 +374,9 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
 
         if (networkInfo!=null && networkInfo.isConnectedOrConnecting()){
             mDnsDiscover.discoverStart();
-            String espIp;
-            do{
-                espIp = espCarFound();
-            }while(espIp == "null");
-            mDnsDiscover.discoverStop();
-            Log.e(TAG, "esp car found IP: " + espIp);
-            //mywebView.loadUrl("https://google.com");
-            mywebView.loadUrl("http://" + espIp + "/index.htm");
-            no_internet_layout.setVisibility(View.GONE);
-            mywebView.setVisibility(View.VISIBLE);
         }else {
             no_internet_layout.setVisibility(View.VISIBLE);
+            mDns_discover_layout.setVisibility(View.GONE);
             mywebView.setVisibility(View.GONE);
             Toast.makeText(this, "You dont have any active internet connection", Toast.LENGTH_SHORT).show();
         }
@@ -407,22 +416,6 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             return true;
         }
     }
-
-
-    @SuppressLint("HandlerLeak")
-    private Handler handler = new Handler(){
-        @Override
-        public void handleMessage(@NonNull Message msg) {
-            switch (msg.what){
-                case 1:
-                    swipeRefreshLayout.setEnabled(false);
-                    break;
-                case 2:
-                    swipeRefreshLayout.setEnabled(true);
-                    break;
-            }
-        }
-    };
 
     public class BrowserClient extends WebViewClient {
 
@@ -470,7 +463,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
             Log.d(TAG, "shouldOverrideUrlLoading 1: " + url);
             //setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-            final Uri uri = Uri.parse(url);
+            //final Uri uri = Uri.parse(url);
             //Toast.makeText(getApplicationContext(),"prova1",Toast.LENGTH_LONG).show();
             return handleUri(view, url);
         }
@@ -478,13 +471,13 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Log.d(TAG, "shouldOverrideUrlLoading 2: " + request.getUrl());
-            final Uri uri = request.getUrl();
+            //final Uri uri = request.getUrl();
             return handleUri(view, request.getUrl().toString());
         }
 
         private boolean handleUri(WebView view, String url) {
             //Toast.makeText(getApplicationContext(),"prova2",Toast.LENGTH_LONG).show();
-            if(url.indexOf("index.htm") > -1 ) {
+            if(url.contains("index.htm")) {
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
                 Log.d(TAG, "handleUri index.htm matched: " + url);
                 // enable or re-enable swipe to refresh page after disabling it in gamepad view
@@ -545,7 +538,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             WebBackForwardList mWebBackForwardList = mywebView.copyBackForwardList();
             if (mWebBackForwardList.getCurrentIndex() > 0) {
                 String historyUrl = mWebBackForwardList.getItemAtIndex(mWebBackForwardList.getCurrentIndex() - 1).getUrl();
-                if(historyUrl.indexOf("index.htm") > -1 ) {
+                if(historyUrl.contains("index.htm")) {
                     setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
                 }
             }
@@ -570,7 +563,11 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             background = false;
             Log.v("activityFocus", "Activity came in foreground ");
             Toast.makeText(getApplicationContext(), "Foreground", Toast.LENGTH_SHORT).show();
-            loadWebPage();
+            //loadWebPage(mDnsDiscover.getIp());
+            // reload the activity
+            startActivity(getIntent());
+            overridePendingTransition(0, 0);
+
         }
     }
 
@@ -594,8 +591,16 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             Log.v("activityFocus", "Activity is in background ");
             Toast.makeText(getApplicationContext(), "Background", Toast.LENGTH_SHORT).show();
             background=true;
+            // stop mDns if active, it consumes bandwidth even if APP is paused in background
+            mDnsDiscover.discoverStop();
+            // close websocket, no need to keep connection and wasting resources and bandwidth
             mywebView.evaluateJavascript("wsStop();", null);
+            // load and empty page in webview to avoid anything running in background
+            // Reload whole page if resumed, dirty but simple
             mywebView.loadUrl("about:blank");
+            //terminate activity
+            finish();
+            overridePendingTransition(0, 0);
         }
     }
 
