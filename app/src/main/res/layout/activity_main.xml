@@ -13,7 +13,6 @@ tools:context=".MainActivity">
         android:background="@android:color/white">
 
 
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -23,78 +22,132 @@ tools:context=".MainActivity">
 
             <ImageView
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="150dp"
+                android:contentDescription="icon image"
                 android:src="@mipmap/ic_launcher_car" />
 
-            <TextView
+            <ImageView
+                android:id="@+id/scan_animation"
+                android:contentDescription="scan animation"
+                android:layout_width="100dp"
+                android:layout_height="100dp" />
+
+            <Button
+                android:visibility="invisible"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Search..."
-                android:textSize="25sp"
-                android:textStyle="bold" />
+                android:text="Scan"
+                android:textAllCaps="false"
+                android:onClick="reScan"
+                android:backgroundTint="@color/appBlue"
+                android:textColor="@android:color/white"
+                android:layout_marginTop="25dp"
+                android:layout_marginBottom="25dp"/>
+
         </LinearLayout>
     </RelativeLayout>
 
-<androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:id="@+id/webView_reload">
-    <WebView
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:id="@+id/webView_reload">
+        <WebView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            android:id="@+id/webview"/>
+
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+    <RelativeLayout
+        android:id="@+id/mDns_timeout_layout"
+        android:visibility="gone"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/white">
+
+         <LinearLayout
+             android:layout_width="match_parent"
+             android:layout_height="wrap_content"
+             android:orientation="vertical"
+             android:layout_centerInParent="true"
+             android:gravity="center">
+
+             <ImageView
+                 android:layout_width="match_parent"
+                 android:layout_height="150dp"
+                 android:contentDescription="icon image"
+                 android:src="@mipmap/ic_launcher_car" />
+
+             <ImageView
+                 android:visibility="invisible"
+                 android:id="@+id/hidde_scan_animation"
+                 android:contentDescription="scan animation"
+                 android:layout_width="100dp"
+                 android:layout_height="100dp" />
+
+            <Button
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Scan"
+                android:textAllCaps="false"
+                android:onClick="reScan"
+                android:backgroundTint="@color/appBlue"
+                android:textColor="@android:color/white"
+                android:layout_marginTop="25dp"
+                android:layout_marginBottom="25dp"/>
+        </LinearLayout>
+    </RelativeLayout>
+
+    <RelativeLayout
+        android:id="@+id/no_internet_layout"
+
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:visibility="gone"
-        android:id="@+id/webview"/>
+        android:background="@android:color/white">
 
-</androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-
-<RelativeLayout
-    android:id="@+id/no_internet_layout"
-    android:visibility="gone"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@android:color/white">
-
-    <ImageView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:src="@drawable/no_internet_icon"/>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:orientation="vertical"
-        android:gravity="center">
-        <TextView
-            android:layout_width="wrap_content"
+        <ImageView
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Oops!"
-            android:textSize="25sp"
-            android:textStyle="bold"/>
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="No Internet Connection"
-            android:textStyle="bold"
-            android:textSize="23sp"/>
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Check your network"
-            android:textSize="20sp"/>
-        <Button
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Try Again"
-            android:textAllCaps="false"
-            android:onClick="ReconectWebSite"
-            android:backgroundTint="@color/colorPrimary"
-            android:textColor="@android:color/white"
-            android:layout_marginTop="25dp"
-            android:layout_marginBottom="25dp"/>
+            android:contentDescription = "no internet image"
+            android:src="@drawable/no_internet_icon"/>
 
-    </LinearLayout>
-</RelativeLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:orientation="vertical"
+            android:gravity="center">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Oops!"
+                android:textSize="25sp"
+                android:textStyle="bold"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="No Internet Connection"
+                android:textStyle="bold"
+                android:textSize="23sp"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Check your network"
+                android:textSize="20sp"/>
+            <Button
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Try Again"
+                android:textAllCaps="false"
+                android:onClick="ReconnectWebSite"
+                android:backgroundTint="@color/appBlue"
+                android:textColor="@android:color/white"
+                android:layout_marginTop="25dp"
+                android:layout_marginBottom="100dp"/>
+        </LinearLayout>
+    </RelativeLayout>
 
 
 </RelativeLayout>

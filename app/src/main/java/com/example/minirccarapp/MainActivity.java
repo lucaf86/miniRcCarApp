@@ -4,6 +4,7 @@ import static android.content.ContentValues.TAG;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import android.annotation.SuppressLint;
@@ -13,6 +14,7 @@ import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.drawable.AnimationDrawable;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -37,6 +39,8 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
@@ -52,7 +56,12 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
     private SwipeRefreshLayout swipeRefreshLayout;
     private RelativeLayout no_internet_layout;
     private RelativeLayout mDns_discover_layout;
+    private RelativeLayout mDns_timeout_layout;
     private mDnsDiscover mDnsDiscover;
+
+    private AnimationDrawable searchAnimation;
+
+   // private Button searchButton;
 
     //public String espIPAddr = "null";
 
@@ -70,9 +79,14 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
                     swipeRefreshLayout.setEnabled(true);
                     break;
                 case 3:
+                    handler.removeMessages(4);
                     mDnsDiscover.discoverStop();
-                    Log.e(TAG, "esp car found IP: " + mDnsDiscover.getIp());
+                    searchAnimation.stop();
+                    //Log.e(TAG, "esp car found IP: " + mDnsDiscover.getIp());
                     loadWebPage(mDnsDiscover.getIp());
+                    break;
+                case 4:
+                    ((Runnable)msg.obj).run();
                     break;
             }
         }
@@ -90,20 +104,21 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         super.onConfigurationChanged(newConfig);
 
         // Checks the orientation of the screen
-        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-            Toast.makeText(this, "landscape", Toast.LENGTH_SHORT).show();
-        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
-            Toast.makeText(this, "portrait", Toast.LENGTH_SHORT).show();
-        }
+        //if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+        //    Toast.makeText(this, "landscape", Toast.LENGTH_SHORT).show();
+        //} else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+        //    Toast.makeText(this, "portrait", Toast.LENGTH_SHORT).show();
+        //}
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        Log.w("APP_ON_CREATE", "APP onCreate");
+        //Log.w("APP_ON_CREATE", "APP onCreate");
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
         super.onCreate(savedInstanceState);
-        if (savedInstanceState == null) {
-            Log.w("APP_ON_CREATE", "APP onCreate called the first time");
-        }
+        //if (savedInstanceState == null) {
+        //    Log.w("APP_ON_CREATE", "APP onCreate called the first time");
+        //}
         registerActivityLifecycleCallbacks(this);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -138,28 +153,14 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
 
         Context mContext = getApplicationContext();
 
-/*
-        WifiManager wifi = (WifiManager) mContext.getSystemService(Context.WIFI_SERVICE);
-        WifiManager.MulticastLock multicastLock = wifi.createMulticastLock("multicastLock");
-        multicastLock.setReferenceCounted(true);
-        multicastLock.acquire();
-
-
-        mNsdManager = (NsdManager) mContext.getSystemService(Context.NSD_SERVICE);
-
-
-        initializeResolveListener();
-        initializeListener();
-
-
-        mNsdManager.discoverServices(SERVICE_TYPE, mNsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
-
-        //multicastLock.release(); // release after browsing
-*/
         mywebView = (WebView) findViewById(R.id.webview);
         swipeRefreshLayout = findViewById(R.id.webView_reload);
         no_internet_layout = findViewById(R.id.no_internet_layout);
         mDns_discover_layout = findViewById(R.id.mDns_discover_layout);
+        mDns_timeout_layout = findViewById(R.id.mDns_timeout_layout);
+        ImageView search_animation = (ImageView)findViewById(R.id.scan_animation);
+        search_animation.setBackgroundResource(R.drawable.search_animation);
+        searchAnimation = (AnimationDrawable) search_animation.getBackground();
 
         swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
             @Override
@@ -180,17 +181,12 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             public void webViewGamepadViewSet() {
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
                 handler.sendEmptyMessage(1);
-                Log.d("webViewGamepadViewSet", "webViewGamepadViewSet() called from JS");
+                //Log.d("webViewGamepadViewSet", "webViewGamepadViewSet() called from JS");
             }
         }, "Android");
 
-
-        //mywebView.loadUrl("http://" + espIp + "/index.htm");
         mDnsDiscover = new mDnsDiscover(mContext);
-        checkNetwor();
-        //loadWebPage();
-        //mywebView.evaluateJavascript("setWebView();", null);
-        //Log.w(TAG, "setWebView() called from android");
+        checkNetwork();
     }
 
     class mDnsDiscover {
@@ -213,7 +209,6 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         }
 
         public mDnsDiscover(Context context) {
-            //this.mContext = context;
             this.mNsdManager = (NsdManager) context.getSystemService(Context.NSD_SERVICE);
             this.mWifi = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
 
@@ -246,44 +241,42 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         }
 
         private void discoverStart() {
-            this.mMulticastLock = mWifi.createMulticastLock("multicastLock");
-            this.mMulticastLock.setReferenceCounted(true);
-            this.mMulticastLock.acquire();
+            if(!this.isStared) {
+                this.mMulticastLock = mWifi.createMulticastLock("multicastLock");
+                this.mMulticastLock.setReferenceCounted(true);
+                this.mMulticastLock.acquire();
 
-            this.mNsdManager.discoverServices(SERVICE_TYPE, this.mNsdManager.PROTOCOL_DNS_SD, this.mDiscoveryListener);
-            this.isStared = true;
+                this.mNsdManager.discoverServices(SERVICE_TYPE, this.mNsdManager.PROTOCOL_DNS_SD, this.mDiscoveryListener);
+                this.isStared = true;
+            }
         }
 
         void initializeResolveListener() {
-            Log.e(TAG, "initializeResolveListener ... ");
+            //Log.e(TAG, "initializeResolveListener ... ");
             this.mResolveListener = new NsdManager.ResolveListener() {
                 @Override
                 public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
                     // Called when the resolve fails.  Use the error code to debug.
-                    Log.e(TAG, "Resolve failed" + errorCode);
+                    //Log.e(TAG, "Resolve failed" + errorCode);
                 }
 
                 @Override
                 public void onServiceResolved(NsdServiceInfo serviceInfo) {
-                    Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
+                    //Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
 
-              /*  if (serviceInfo.getServiceName().equals(mServiceName)) {
-                    Log.d(TAG, "Same IP.");
-                    return;
-                }*/
                     NsdServiceInfo service = serviceInfo;
                     //int port = service.getPort();
                     InetAddress host = service.getHost(); // getHost() will work now
-                    Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
+                    //Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
 
                     String hostAddr;
                     if (Objects.requireNonNull(host.getHostAddress()).startsWith("/")) {
-                        Log.d(TAG, "IP: " + host.getHostAddress().substring(1));
+                        //Log.d(TAG, "IP: " + host.getHostAddress().substring(1));
                         hostAddr = host.getHostAddress().substring(1);
                     } else {
                         hostAddr = host.getHostAddress();
                     }
-                    Log.d(TAG, "host IP: " + hostAddr);
+                    //Log.d(TAG, "host IP: " + hostAddr);
 
                     if (isConnectedToThisServer(hostAddr)) {
                         ipAddr = hostAddr;
@@ -291,7 +284,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
                     }
                 }
             };
-            Log.e(TAG, "initializeResolveListener ... END");
+            //Log.e(TAG, "initializeResolveListener ... END");
         }
 
 
@@ -299,35 +292,21 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         //NsdManager.DiscoveryListener mDiscoveryListener;
         // private NsdManager.DiscoveryListener mDiscoveryListener = new NsdManager.DiscoveryListener() {
         void initializeListener() {
-            Log.e(TAG, "initializeListener ... ");
+            //Log.e(TAG, "initializeListener ... ");
             this.mDiscoveryListener = new NsdManager.DiscoveryListener() {
 
                 String TAG = "NSDFINDER";
-                //NsdManager mNsdManager;
-                //NsdManager.DiscoveryListener mDiscoveryListener;
-                //String mServiceName;
-                //String SERVICE_TYPE = "_http._tcp.";
-                //String SERVICE_TYPE = "_espcar._tcp.";
-                //String serviceName;
-                //int mDiscoveryActive = 0;
-                //NsdManager.ResolveListener mResolveListener;
-                //NsdServiceInfo mService;
-                //int mServiceport;
-                //InetAddress mServicehostAdress;
 
                 // Called as soon as service discovery begins.
                 @Override
                 public void onDiscoveryStarted(String regType) {
-                    Log.d(TAG, "Service discovery started");
+                    //Log.d(TAG, "Service discovery started");
                 }
 
                 @Override
                 public void onServiceFound(NsdServiceInfo service) {
                     // A service was found! Do something with it.
-
-                    //mNsdManager.resolveService(service, mResolveListener);
-                    //mNsdManager.stopServiceDiscovery(mDiscoveryListener)
-                    Log.d(TAG, "Service discovery success :: " + service);
+                    //Log.d(TAG, "Service discovery success :: " + service);
 
                     // host and port not yet availbale her, need to call resolveService() to decode them
                     if (service.getServiceType().equals(SERVICE_TYPE)) {
@@ -342,49 +321,73 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
                 public void onServiceLost(NsdServiceInfo service) {
                     // When the network service is no longer available.
                     // Internal bookkeeping code goes here.
-                    Log.e(TAG, "service lost: " + service);
+                    //Log.e(TAG, "service lost: " + service);
                 }
 
                 @Override
                 public void onDiscoveryStopped(String serviceType) {
-                    Log.i(TAG, "Discovery stopped: " + serviceType);
+                    //Log.i(TAG, "Discovery stopped: " + serviceType);
                 }
 
                 @Override
                 public void onStartDiscoveryFailed(String serviceType, int errorCode) {
-                    Log.e(TAG, "Discovery failed: Error code:" + errorCode);
+                    //Log.e(TAG, "Discovery failed: Error code:" + errorCode);
                     //mNsdManager.stopServiceDiscovery(this);
                 }
 
                 @Override
                 public void onStopDiscoveryFailed(String serviceType, int errorCode) {
-                    Log.e(TAG, "Discovery failed: Error code:" + errorCode);
+                    //Log.e(TAG, "Discovery failed: Error code:" + errorCode);
                     //mNsdManager.stopServiceDiscovery(this);
                 }
             };
-            Log.e(TAG, "initializeListener ... END");
+            //Log.e(TAG, "initializeListener ... END");
         }
     }
 
-    private void checkNetwor() {
-
+    private void checkNetwork() {
         ConnectivityManager cm = (ConnectivityManager) MainActivity.this
                 .getApplication().getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = cm.getActiveNetworkInfo();
 
         if (networkInfo!=null && networkInfo.isConnectedOrConnecting()){
             mDnsDiscover.discoverStart();
+            Message m = Message.obtain();
+            m.what = 4;
+            m.obj = new Runnable() {
+                @Override
+                public void run() {
+                    mDns_discover_layout.setVisibility(View.GONE);
+                    mDns_timeout_layout.setVisibility(View.VISIBLE);
+                    searchAnimation.stop();
+                }
+            };
+            handler.sendMessageDelayed(m, 10 * 1000);
+            no_internet_layout.setVisibility(View.GONE);
+            mDns_discover_layout.setVisibility(View.VISIBLE);
+            searchAnimation.start();
+            mDns_timeout_layout.setVisibility(View.GONE);
+            mywebView.setVisibility(View.GONE);
         }else {
             no_internet_layout.setVisibility(View.VISIBLE);
+            mDns_timeout_layout.setVisibility(View.GONE);
             mDns_discover_layout.setVisibility(View.GONE);
             mywebView.setVisibility(View.GONE);
-            Toast.makeText(this, "You dont have any active internet connection", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "You don't have any active internet connection", Toast.LENGTH_SHORT).show();
         }
     }
 
-   // public void ReconectWebSite(View view) {
-   //     loadWebPage(mContext);
-   // }
+    public void ReconnectWebSite(View view) {
+      //  loadWebPage(mContext);
+        Log.d("BUTTON", "ReconnectWebSite");
+        checkNetwork();
+    }
+
+    public void reScan(View view) {
+
+        Log.d("BUTTON", "reScan");
+        checkNetwork();
+    }
 
     public void onWindowFocusChanged(boolean hasFocus)
     {
@@ -427,7 +430,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
 
         @Override
         public void onPageStarted(WebView view, String url, Bitmap favicon) {
-            Log.d(TAG, "onPageStarted: " + url);
+            //Log.d(TAG, "onPageStarted: " + url);
             //Toast.makeText(getApplicationContext(),"onPageStarted",Toast.LENGTH_LONG).show();
 
             super.onPageStarted(view, url, favicon);
@@ -438,30 +441,20 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         public void onPageFinished(WebView view, String url) {
             super.onPageFinished(view, url);
             view.evaluateJavascript("setWebView();", null);
-            Log.w(TAG, "setWebView() called from android");
-            /*view.loadUrl(
-                    """javascript:(function f() {
-                      var btns = document.getElementsByTagName('button');
-                      for (var i = 0, n = allElements.length; i < n; i++) {
-                        if (btns[i].getAttribute('aria-label') === 'Support') {
-                          btns[i].setAttribute('onclick', 'Android.onClicked()');
-                        }
-                      }
-                    })()"""
-            );*/
+            //Log.w(TAG, "setWebView() called from android");
             swipeRefreshLayout.setRefreshing(false);
         }
 
         @Override
         public void onLoadResource(WebView view, String url) {
-            Log.d(TAG, "onLoadResource: " + url);
+            //Log.d(TAG, "onLoadResource: " + url);
             //Toast.makeText(getApplicationContext(),"onLoadResource",Toast.LENGTH_LONG).show();
 
         }
 
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            Log.d(TAG, "shouldOverrideUrlLoading 1: " + url);
+            //Log.d(TAG, "shouldOverrideUrlLoading 1: " + url);
             //setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
             //final Uri uri = Uri.parse(url);
             //Toast.makeText(getApplicationContext(),"prova1",Toast.LENGTH_LONG).show();
@@ -470,7 +463,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
 
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-            Log.d(TAG, "shouldOverrideUrlLoading 2: " + request.getUrl());
+            //Log.d(TAG, "shouldOverrideUrlLoading 2: " + request.getUrl());
             //final Uri uri = request.getUrl();
             return handleUri(view, request.getUrl().toString());
         }
@@ -479,7 +472,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             //Toast.makeText(getApplicationContext(),"prova2",Toast.LENGTH_LONG).show();
             if(url.contains("index.htm")) {
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-                Log.d(TAG, "handleUri index.htm matched: " + url);
+                //Log.d(TAG, "handleUri index.htm matched: " + url);
                 // enable or re-enable swipe to refresh page after disabling it in gamepad view
                 handler.sendEmptyMessage(2);
             //return false;
@@ -487,43 +480,21 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             else {
 
             }
-       //     view.loadUrl(url);
-     //       getSupportActionBar().hide();
-            //final String host = uri.getHost();
-            //final String scheme = uri.getScheme();
-            // Based on some condition you need to determine if you are going to load the url
-            // in your web view itself or in a browser.
-            // You can use `host` or `scheme` or any part of the `uri` to decide.
-            //if (/* any condition */) {
-                // Returning false means that you are going to load this url in the webView itself
-           //     return false;
-           // } else {
-                // Returning true means that you need to handle what to do with the url
-                // e.g. open web page in a Browser
-            //    final Intent intent = new Intent(Intent.ACTION_VIEW, uri);
-           //     startActivity(intent);
-            //    return true;
-            //}
             return false;
         }
 
         @Override
         public WebResourceResponse shouldInterceptRequest ( WebView view, String url) {
-            Log.d(TAG, "shouldInterceptRequest 1: " + url);
+            //Log.d(TAG, "shouldInterceptRequest 1: " + url);
             //Toast.makeText(getApplicationContext(),"prova3",Toast.LENGTH_LONG).show();
             handleUri(view, url);
-
-            // if (url.contains(".css")) {
-           //     return getCssWebResourceResponseFromAsset();
-            //} else {
-                return super.shouldInterceptRequest(view, url);
-            //}
+            return super.shouldInterceptRequest(view, url);
         }
 
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view,
                                                           WebResourceRequest request) {
-            Log.d(TAG, "shouldInterceptRequest 2: " + request.getUrl());
+            //Log.d(TAG, "shouldInterceptRequest 2: " + request.getUrl());
             //Toast.makeText(getApplicationContext(),"prova4",Toast.LENGTH_LONG).show();
             handleUri(view, request.getUrl().toString());
             return shouldInterceptRequest(view, request.getUrl().toString());
@@ -553,43 +524,42 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
 
     @Override
     public void onActivityCreated(Activity activity, Bundle bundle) {
-        Log.v("onActivity", "Activity created ");
+        //Log.v("onActivity", "Activity created ");
     }
 
     @Override
     public void onActivityStarted(Activity activity) {
-        Log.v("onActivity", "Activity started ");
+        //Log.v("onActivity", "Activity started ");
         if(background){
             background = false;
-            Log.v("activityFocus", "Activity came in foreground ");
-            Toast.makeText(getApplicationContext(), "Foreground", Toast.LENGTH_SHORT).show();
-            //loadWebPage(mDnsDiscover.getIp());
+            //Log.v("activityFocus", "Activity came in foreground ");
+            //Toast.makeText(getApplicationContext(), "Foreground", Toast.LENGTH_SHORT).show();
+
             // reload the activity
             startActivity(getIntent());
             overridePendingTransition(0, 0);
-
         }
     }
 
     @Override
     public void onActivityResumed(Activity activity) {
         count++;
-        Log.v("onActivity", "Activity resumed ");
+        //Log.v("onActivity", "Activity resumed ");
     }
 
     @Override
     public void onActivityPaused(Activity activity) {
         count--;
-        Log.v("onActivity", "Activity paused ");
+        //Log.v("onActivity", "Activity paused ");
 
     }
 
     @Override
     public void onActivityStopped(Activity activity) {
-        Log.v("onActivity", "Activity stopped ");
+        //Log.v("onActivity", "Activity stopped ");
         if(count==0){
-            Log.v("activityFocus", "Activity is in background ");
-            Toast.makeText(getApplicationContext(), "Background", Toast.LENGTH_SHORT).show();
+            //Log.v("activityFocus", "Activity is in background ");
+            //Toast.makeText(getApplicationContext(), "Background", Toast.LENGTH_SHORT).show();
             background=true;
             // stop mDns if active, it consumes bandwidth even if APP is paused in background
             mDnsDiscover.discoverStop();
@@ -606,11 +576,11 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
 
     @Override
     public void onActivitySaveInstanceState(Activity activity, Bundle bundle) {
-        Log.v("onActivity", "Activity SaveInstanceState ");
+        //Log.v("onActivity", "Activity SaveInstanceState ");
     }
 
     @Override
     public void onActivityDestroyed(Activity activity) {
-        Log.v("onActivity", "Activity Destroyed ");
+        //Log.v("onActivity", "Activity Destroyed ");
     }
 }
