@@ -16,11 +16,14 @@ import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.drawable.AnimationDrawable;
 import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
 import android.net.Uri;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -100,7 +103,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         mywebView.setVisibility(View.VISIBLE);
     }
 
-    public void onConfigurationChanged(Configuration newConfig) {
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
 
         // Checks the orientation of the screen
@@ -111,6 +114,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         //}
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         //Log.w("APP_ON_CREATE", "APP onCreate");
@@ -246,7 +250,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
                 this.mMulticastLock.setReferenceCounted(true);
                 this.mMulticastLock.acquire();
 
-                this.mNsdManager.discoverServices(SERVICE_TYPE, this.mNsdManager.PROTOCOL_DNS_SD, this.mDiscoveryListener);
+                this.mNsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, this.mDiscoveryListener);
                 this.isStared = true;
             }
         }
@@ -264,9 +268,8 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
                 public void onServiceResolved(NsdServiceInfo serviceInfo) {
                     //Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
 
-                    NsdServiceInfo service = serviceInfo;
-                    //int port = service.getPort();
-                    InetAddress host = service.getHost(); // getHost() will work now
+                    //int port = serviceInfo.getPort();
+                    InetAddress host = serviceInfo.getHost(); // getHost() will work now
                     //Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
 
                     String hostAddr;
@@ -295,7 +298,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             //Log.e(TAG, "initializeListener ... ");
             this.mDiscoveryListener = new NsdManager.DiscoveryListener() {
 
-                String TAG = "NSDFINDER";
+                //String TAG = "NSDFINDER";
 
                 // Called as soon as service discovery begins.
                 @Override
@@ -345,12 +348,21 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         }
     }
 
-    private void checkNetwork() {
-        ConnectivityManager cm = (ConnectivityManager) MainActivity.this
-                .getApplication().getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo networkInfo = cm.getActiveNetworkInfo();
+    private Boolean isNetworkAvailable(Application application) {
+        ConnectivityManager connectivityManager = (ConnectivityManager) application.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Network nw = connectivityManager.getActiveNetwork();
+            if (nw == null) return false;
+            NetworkCapabilities actNw = connectivityManager.getNetworkCapabilities(nw);
+            return actNw != null && (actNw.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || actNw.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) || actNw.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) || actNw.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH));
+        } else {
+            NetworkInfo nwInfo = connectivityManager.getActiveNetworkInfo();
+            return nwInfo != null && nwInfo.isConnected();
+        }
+    }
 
-        if (networkInfo!=null && networkInfo.isConnectedOrConnecting()){
+    private void checkNetwork() {
+        if (isNetworkAvailable(MainActivity.this.getApplication())){
             mDnsDiscover.discoverStart();
             Message m = Message.obtain();
             m.what = 4;
@@ -439,10 +451,14 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
 
         @Override
         public void onPageFinished(WebView view, String url) {
-            super.onPageFinished(view, url);
-            view.evaluateJavascript("setWebView();", null);
-            //Log.w(TAG, "setWebView() called from android");
-            swipeRefreshLayout.setRefreshing(false);
+            if (view.getContentHeight() == 0){
+                view.reload();
+            } else {
+                super.onPageFinished(view, url);
+                view.evaluateJavascript("setWebView();", null);
+                //Log.w(TAG, "setWebView() called from android");
+                swipeRefreshLayout.setRefreshing(false);
+            }
         }
 
         @Override
@@ -475,12 +491,11 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
                 //Log.d(TAG, "handleUri index.htm matched: " + url);
                 // enable or re-enable swipe to refresh page after disabling it in gamepad view
                 handler.sendEmptyMessage(2);
-            //return false;
+                return false;
             }
             else {
-
+                return false;
             }
-            return false;
         }
 
         @Override
