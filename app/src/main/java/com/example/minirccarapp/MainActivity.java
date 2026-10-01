@@ -7,6 +7,14 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.core.content.ContextCompat;
+import java.util.ArrayList;
+import java.util.List;
+
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Application;
@@ -70,6 +78,25 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
 
     //public String espCarFound() { return espIPAddr; }
 
+    // Registra il gestore grafico per la richiesta dei permessi multipli
+    private final ActivityResultLauncher<String[]> requestPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
+                boolean allGranted = true;
+                for (Boolean granted : result.values()) {
+                    if (!granted) {
+                        allGranted = false;
+                        break;
+                    }
+                }
+
+                if (allGranted) {
+                    Toast.makeText(this, "Permessi concessi! Pronto a guidare.", Toast.LENGTH_SHORT).show();
+                    // Qui puoi far partire la logica di connessione all'ESP32
+                } else {
+                    Toast.makeText(this, "L'app ha bisogno dei permessi per rilevare l'auto RC.", Toast.LENGTH_LONG).show();
+                }
+            });
+
     @SuppressLint("HandlerLeak")
     final private Handler handler = new Handler(Looper.myLooper()){
         @Override
@@ -129,6 +156,9 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         supportRequestWindowFeature(Window.FEATURE_ACTION_BAR_OVERLAY);
         setContentView(R.layout.activity_main);
 
+        // Controlla e richiedi i permessi all'avvio
+        checkAndRequestPermissions();
+
         //    this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
         final int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
@@ -177,8 +207,13 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         mywebView.setWebViewClient(new BrowserClient(swipeRefreshLayout));
         WebSettings webSettings = mywebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
+        webSettings.setDomStorageEnabled(true);
         webSettings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
+        // Permette alla WebView di caricare risorse HTTP/WS in chiaro anche se il sistema è restrittivo
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        }
         //mywebView.addJavascriptInterface(AndroidJSInterface, "Android");
         mywebView.addJavascriptInterface(new Object() {
             @JavascriptInterface
@@ -345,6 +380,20 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
                 }
             };
             //Log.e(TAG, "initializeListener ... END");
+        }
+    }
+
+    private void checkAndRequestPermissions() {
+        List<String> permissionsNeeded = new ArrayList<>();
+
+        // Permessi per il Wi-Fi / Posizione (necessari su tutte le versioni per scansione di rete)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        }
+
+        // Se ci sono permessi non ancora accettati, lancia la richiesta grafica di sistema
+        if (!permissionsNeeded.isEmpty()) {
+            requestPermissionLauncher.launch(permissionsNeeded.toArray(new String[0]));
         }
     }
 
