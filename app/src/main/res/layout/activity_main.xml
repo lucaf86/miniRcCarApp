@@ -23,12 +23,12 @@ tools:context=".MainActivity">
             <ImageView
                 android:layout_width="match_parent"
                 android:layout_height="150dp"
-                android:contentDescription="icon image"
+                android:contentDescription="@string/icon_image"
                 android:src="@mipmap/ic_launcher_car" />
 
             <ImageView
                 android:id="@+id/scan_animation"
-                android:contentDescription="scan animation"
+                android:contentDescription="@string/scan_animation"
                 android:layout_width="100dp"
                 android:layout_height="100dp" />
 
@@ -36,7 +36,7 @@ tools:context=".MainActivity">
                 android:visibility="invisible"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Scan"
+                android:text="@string/btn_scan"
                 android:textAllCaps="false"
                 android:onClick="reScan"
                 android:backgroundTint="@color/appBlue"
@@ -76,20 +76,20 @@ tools:context=".MainActivity">
              <ImageView
                  android:layout_width="match_parent"
                  android:layout_height="150dp"
-                 android:contentDescription="icon image"
+                 android:contentDescription="@string/icon_image"
                  android:src="@mipmap/ic_launcher_car" />
 
              <ImageView
                  android:visibility="invisible"
                  android:id="@+id/hidde_scan_animation"
-                 android:contentDescription="scan animation"
+                 android:contentDescription="@string/scan_animation"
                  android:layout_width="100dp"
                  android:layout_height="100dp" />
 
             <Button
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Scan"
+                android:text="@string/btn_scan"
                 android:textAllCaps="false"
                 android:onClick="reScan"
                 android:backgroundTint="@color/appBlue"
@@ -110,7 +110,7 @@ tools:context=".MainActivity">
         <ImageView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:contentDescription = "no internet image"
+            android:contentDescription = "@string/no_internet_image"
             android:src="@drawable/no_internet_icon"/>
 
         <LinearLayout
@@ -122,24 +122,24 @@ tools:context=".MainActivity">
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Oops!"
+                android:text="@string/str_oops"
                 android:textSize="25sp"
                 android:textStyle="bold"/>
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="No Internet Connection"
+                android:text="@string/no_internet_connection"
                 android:textStyle="bold"
                 android:textSize="23sp"/>
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Check your network"
+                android:text="@string/check_your_network"
                 android:textSize="20sp"/>
             <Button
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Try Again"
+                android:text="@string/btn_try_again"
                 android:textAllCaps="false"
                 android:onClick="ReconnectWebSite"
                 android:backgroundTint="@color/appBlue"
