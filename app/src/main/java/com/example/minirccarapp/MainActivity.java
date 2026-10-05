@@ -8,12 +8,14 @@ import androidx.appcompat.app.AppCompatDelegate;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 import java.util.ArrayList;
 import java.util.List;
+import androidx.activity.OnBackPressedCallback;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -39,6 +41,8 @@ import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.JsPromptResult;
@@ -59,6 +63,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Objects;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity implements Application.ActivityLifecycleCallbacks {
 
@@ -98,7 +103,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             });
 
     @SuppressLint("HandlerLeak")
-    final private Handler handler = new Handler(Looper.myLooper()){
+    final private Handler handler = new Handler(Looper.getMainLooper()){
         @Override
         public void handleMessage(@NonNull Message msg) {
             switch (msg.what){
@@ -151,8 +156,21 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         //    Log.w("APP_ON_CREATE", "APP onCreate called the first time");
         //}
         registerActivityLifecycleCallbacks(this);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getWindow().getDecorView().post(() -> {
+                WindowInsetsController controller = getWindow().getInsetsController();
+                if (controller != null) {
+                    // Nasconde la barra di stato (in alto) e le barre dei gesti/navigazione (in basso)
+                    controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+
+                    // Imposta il comportamento immersivo nativo ideale per la macchinina RC
+                    controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                }
+            });
+        } else {
+            getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        }
         supportRequestWindowFeature(Window.FEATURE_ACTION_BAR_OVERLAY);
         setContentView(R.layout.activity_main);
 
@@ -161,20 +179,46 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
 
         //    this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
-        final int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                | View.SYSTEM_UI_FLAG_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Sostituisce SYSTEM_UI_FLAG_IMMERSIVE_STICKY, HIDE_NAVIGATION e FULLSCREEN su Android 11+ (fino a 17)
+            WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                // Nasconde sia la barra di stato superiore che la barra dei tasti/gesti inferiore
+                controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
 
-        this.getWindow().getDecorView().setSystemUiVisibility(flags);
+                // Questo sostituisce perfettamente IMMERSIVE_STICKY:
+                // le barre ricompaiono in trasparenza solo con uno swipe e poi spariscono da sole
+                controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
 
-        // Code below is to handle presses of Volume up or Volume down.
-        // Without this, after pressing volume buttons, the navigation bar will
-        // show up and won't hide
-        final View decorView = getWindow().getDecorView();
-        decorView
+            getWindow().getDecorView().setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+                @Override
+                public WindowInsets onApplyWindowInsets( @NonNull View v,  @NonNull WindowInsets insets) {
+                    WindowInsetsController controller = getWindow().getInsetsController();
+                    if (controller != null) {
+                        // Si assicura che lo schermo intero rimanga attivo anche dopo eventi di sistema (es. volume)
+                        controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+                        controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                    }
+                    return insets;
+                }
+            });
+
+        } else {
+            final int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+
+            this.getWindow().getDecorView().setSystemUiVisibility(flags);
+
+            // Code below is to handle presses of Volume up or Volume down.
+            // Without this, after pressing volume buttons, the navigation bar will
+            // show up and won't hide
+            final View decorView = getWindow().getDecorView();
+            decorView
                 .setOnSystemUiVisibilityChangeListener(new View.OnSystemUiVisibilityChangeListener() {
 
                     @Override
@@ -184,7 +228,7 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
                         }
                     }
                 });
-
+        }
         Context mContext = getApplicationContext();
 
         mywebView = (WebView) findViewById(R.id.webview);
@@ -223,6 +267,28 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
                 //Log.d("webViewGamepadViewSet", "webViewGamepadViewSet() called from JS");
             }
         }, "Android");
+
+        // Registra il nuovo callback per intercettare il gesto "Indietro" (compatibile con API 37)
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (mywebView != null && mywebView.canGoBack()) {
+                    //myWebView = (WebView) findViewById(R.id.webview);
+                    WebBackForwardList mWebBackForwardList = mywebView.copyBackForwardList();
+                    if (mWebBackForwardList.getCurrentIndex() > 0) {
+                        String historyUrl = mWebBackForwardList.getItemAtIndex(mWebBackForwardList.getCurrentIndex() - 1).getUrl();
+                        if(historyUrl.contains("index.htm")) {
+                            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                        }
+                    }
+                    mywebView.goBack();
+                }
+                else {
+                    // Altrimenti, se non c'è più cronologia nella WebView, chiude l'applicazione in sicurezza
+                    finish();
+                }
+            }
+        });
 
         mDnsDiscover = new mDnsDiscover(mContext);
         checkNetwork();
@@ -291,38 +357,45 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
         }
 
         void initializeResolveListener() {
-            //Log.e(TAG, "initializeResolveListener ... ");
-            this.mResolveListener = new NsdManager.ResolveListener() {
-                @Override
-                public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
-                    // Called when the resolve fails.  Use the error code to debug.
-                    //Log.e(TAG, "Resolve failed" + errorCode);
-                }
-
-                @Override
-                public void onServiceResolved(NsdServiceInfo serviceInfo) {
-                    //Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
-
-                    //int port = serviceInfo.getPort();
-                    InetAddress host = serviceInfo.getHost(); // getHost() will work now
-                    //Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
-
-                    String hostAddr;
-                    if (Objects.requireNonNull(host.getHostAddress()).startsWith("/")) {
-                        //Log.d(TAG, "IP: " + host.getHostAddress().substring(1));
-                        hostAddr = host.getHostAddress().substring(1);
-                    } else {
-                        hostAddr = host.getHostAddress();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                //Log.e(TAG, "initializeResolveListener ... ");
+                this.mResolveListener = new NsdManager.ResolveListener() {
+                    @Override
+                    public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
+                        // Called when the resolve fails.  Use the error code to debug.
+                        //Log.e(TAG, "Resolve failed" + errorCode);
                     }
-                    //Log.d(TAG, "host IP: " + hostAddr);
 
-                    if (isConnectedToThisServer(hostAddr)) {
-                        ipAddr = hostAddr;
-                        handler.sendEmptyMessage(3);
+                    @Override
+                    public void onServiceResolved(NsdServiceInfo serviceInfo) {
+                        //Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
+
+                        //int port = serviceInfo.getPort();
+
+                        InetAddress host = serviceInfo.getHost(); // getHost() will work now
+
+                        //Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
+
+                        String hostAddr;
+
+                        if (host != null) {
+                            if (Objects.requireNonNull(host.getHostAddress()).startsWith("/")) {
+                                //Log.d(TAG, "IP: " + host.getHostAddress().substring(1));
+                                hostAddr = host.getHostAddress().substring(1);
+                            } else {
+                                hostAddr = host.getHostAddress();
+                            }
+                            //Log.d(TAG, "host IP: " + hostAddr);
+
+                            if (isConnectedToThisServer(hostAddr)) {
+                                ipAddr = hostAddr;
+                                handler.sendEmptyMessage(3);
+                            }
+                        }
                     }
-                }
-            };
-            //Log.e(TAG, "initializeResolveListener ... END");
+                };
+                //Log.e(TAG, "initializeResolveListener ... END");
+            }
         }
 
 
@@ -347,10 +420,70 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
                     //Log.d(TAG, "Service discovery success :: " + service);
 
                     // host and port not yet availbale her, need to call resolveService() to decode them
+
                     if (service.getServiceType().equals(SERVICE_TYPE)) {
                         //if (service.getServiceName().equals(SERVICE_NAME))
                         if (service.getServiceName().contains(SERVICE_NAME)) {
-                            mNsdManager.resolveService(service, mResolveListener);
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                // PER ANDROID 14 FINO A 17 (API 34-37)
+                                // Sostituisce il vecchio resolveService con registerServiceInfoCallback
+                                mNsdManager.registerServiceInfoCallback(service, Executors.newSingleThreadExecutor(), new NsdManager.ServiceInfoCallback() {
+                                    @Override
+                                    public void onServiceInfoCallbackRegistrationFailed(int errorCode) {
+                                        // Gestione dell'errore di registrazione (opzionale)
+                                    }
+
+                                    @Override
+                                    public void onServiceUpdated(@NonNull NsdServiceInfo serviceInfo) {
+                                        // Questo metodo viene chiamato automaticamente quando l'IP dell'ESP32 viene risolto con successo
+                                        // Può estrarre l'indirizzo esattamente come facevi nel ResolveListener:
+                                        // String ip = serviceInfo.getHostAddresses().get(0).getHostAddress();
+                                        //Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
+
+                                        //int port = serviceInfo.getPort();
+
+                                        InetAddress host = null;
+                                        List<InetAddress> addresses = serviceInfo.getHostAddresses();
+                                        if (!addresses.isEmpty()) {
+                                            host = addresses.get(0); // Prende il primo indirizzo IP valido (IPv4 o IPv6) risolto per l'ESP32
+                                        }
+                                        //Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
+
+                                        String hostAddr;
+
+                                        if (host != null) {
+                                            if (Objects.requireNonNull(host.getHostAddress()).startsWith("/")) {
+                                                //Log.d(TAG, "IP: " + host.getHostAddress().substring(1));
+                                                hostAddr = host.getHostAddress().substring(1);
+                                            } else {
+                                                hostAddr = host.getHostAddress();
+                                            }
+                                            //Log.d(TAG, "host IP: " + hostAddr);
+
+                                            if (isConnectedToThisServer(hostAddr)) {
+                                                ipAddr = hostAddr;
+                                                handler.sendEmptyMessage(3);
+                                            }
+                                        }
+
+                                        // IMPORTANTE: Una volta ottenuto l'IP, rimuovi il callback per liberare risorse
+                                        mNsdManager.unregisterServiceInfoCallback(this);
+                                    }
+
+                                    @Override
+                                    public void onServiceLost() {
+                                        // Gestione del servizio perso (opzionale)
+                                    }
+
+                                    @Override
+                                    public void onServiceInfoCallbackUnregistered() {
+                                        // Callback rimosso con successo
+                                    }
+                                });
+
+                            } else {
+                                mNsdManager.resolveService(service, mResolveListener);
+                            }
                         }
                     }
                 }
@@ -384,11 +517,19 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
     }
 
     private void checkAndRequestPermissions() {
+
         List<String> permissionsNeeded = new ArrayList<>();
 
-        // Permessi per il Wi-Fi / Posizione (necessari su tutte le versioni per scansione di rete)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            permissionsNeeded.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Da Android 13 (API 33) fino ad Android 17 (API 37), il controllo corretto per il Wi-Fi locale è questo:
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(Manifest.permission.NEARBY_WIFI_DEVICES);
+            }
+        } else {
+            // Vecchio controllo di sicurezza basato sulla geolocalizzazione per versioni precedenti
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(Manifest.permission.ACCESS_FINE_LOCATION);
+            }
         }
 
         // Se ci sono permessi non ancora accettati, lancia la richiesta grafica di sistema
@@ -547,52 +688,26 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             }
         }
 
-        @Override
-        public WebResourceResponse shouldInterceptRequest ( WebView view, String url) {
-            //Log.d(TAG, "shouldInterceptRequest 1: " + url);
-            //Toast.makeText(getApplicationContext(),"prova3",Toast.LENGTH_LONG).show();
-            handleUri(view, url);
-            return super.shouldInterceptRequest(view, url);
-        }
-
-        @Override
+         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view,
                                                           WebResourceRequest request) {
             //Log.d(TAG, "shouldInterceptRequest 2: " + request.getUrl());
             //Toast.makeText(getApplicationContext(),"prova4",Toast.LENGTH_LONG).show();
             handleUri(view, request.getUrl().toString());
-            return shouldInterceptRequest(view, request.getUrl().toString());
+            return super.shouldInterceptRequest(view, request);
         }
 
-    }
-
-    @Override
-    public void onBackPressed(){
-        if(mywebView.canGoBack()){
-            //myWebView = (WebView) findViewById(R.id.webview);
-            WebBackForwardList mWebBackForwardList = mywebView.copyBackForwardList();
-            if (mWebBackForwardList.getCurrentIndex() > 0) {
-                String historyUrl = mWebBackForwardList.getItemAtIndex(mWebBackForwardList.getCurrentIndex() - 1).getUrl();
-                if(historyUrl.contains("index.htm")) {
-                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-                }
-            }
-            mywebView.goBack();
-        }
-        else {
-            super.onBackPressed();
-        }
     }
 
     private static int count = 0;
 
     @Override
-    public void onActivityCreated(Activity activity, Bundle bundle) {
+    public void onActivityCreated( @NonNull Activity activity, Bundle bundle) {
         //Log.v("onActivity", "Activity created ");
     }
 
     @Override
-    public void onActivityStarted(Activity activity) {
+    public void onActivityStarted( @NonNull Activity activity) {
         //Log.v("onActivity", "Activity started ");
         if(background){
             background = false;
@@ -600,26 +715,37 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             //Toast.makeText(getApplicationContext(), "Foreground", Toast.LENGTH_SHORT).show();
 
             // reload the activity
-            startActivity(getIntent());
-            overridePendingTransition(0, 0);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // Crea un nuovo Intent pulito ed esplicito per evitare vulnerabilità di sicurezza
+                Intent refreshIntent = new Intent(this, MainActivity.class);
+                // Evita di accumulare istanze della stessa attività nello stack del telefono
+                refreshIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(refreshIntent);
+
+                // Per Android 14 fino a 17 (API 34-37)
+                overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, 0, 0);
+            } else {
+                startActivity(getIntent());
+                overridePendingTransition(0, 0);
+            }
         }
     }
 
     @Override
-    public void onActivityResumed(Activity activity) {
+    public void onActivityResumed( @NonNull Activity activity) {
         count++;
         //Log.v("onActivity", "Activity resumed ");
     }
 
     @Override
-    public void onActivityPaused(Activity activity) {
+    public void onActivityPaused( @NonNull Activity activity) {
         count--;
         //Log.v("onActivity", "Activity paused ");
 
     }
 
     @Override
-    public void onActivityStopped(Activity activity) {
+    public void onActivityStopped( @NonNull Activity activity) {
         //Log.v("onActivity", "Activity stopped ");
         if(count==0){
             //Log.v("activityFocus", "Activity is in background ");
@@ -634,17 +760,26 @@ public class MainActivity extends AppCompatActivity implements Application.Activ
             mywebView.loadUrl("about:blank");
             //terminate activity
             finish();
-            overridePendingTransition(0, 0);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // PER ANDROID 14 FINO A 17 (API 34-37)
+                // Disattiva l'animazione di chiusura (o apertura) dell'Activity
+                overrideActivityTransition(Activity.OVERRIDE_TRANSITION_CLOSE, 0, 0);
+                // Se la chiamata avviene all'apertura dell'app, puoi aggiungere anche questa:
+                // overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, 0, 0);
+            } else {
+                // FALLBACK (Per telefoni precedenti ad Android 14)
+                overridePendingTransition(0, 0);
+            }
         }
     }
 
     @Override
-    public void onActivitySaveInstanceState(Activity activity, Bundle bundle) {
+    public void onActivitySaveInstanceState( @NonNull Activity activity,  @NonNull Bundle bundle) {
         //Log.v("onActivity", "Activity SaveInstanceState ");
     }
 
     @Override
-    public void onActivityDestroyed(Activity activity) {
+    public void onActivityDestroyed( @NonNull Activity activity) {
         //Log.v("onActivity", "Activity Destroyed ");
     }
 }
